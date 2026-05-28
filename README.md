@@ -11,6 +11,16 @@
 - Database: `data/conference_map.sqlite3`
 - Seed data: `data/seed_data.json`
 
+## Map Data
+
+The frontend does not use a third-party map tile server. It renders a bundled
+Natural Earth 1:110m country boundary GeoJSON from:
+
+https://github.com/nvkelso/natural-earth-vector
+
+Natural Earth raster and vector map data is public domain. The bundled file is a
+reduced copy that keeps only country names and geometry for app rendering.
+
 ## Run
 
 Backend:

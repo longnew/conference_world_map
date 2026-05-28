@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import L from "leaflet";
-import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip } from "react-leaflet";
+import { CircleMarker, GeoJSON, MapContainer, Popup, Tooltip } from "react-leaflet";
 import { CalendarDays, ChevronDown, ChevronRight, Database, Filter, Globe2, MapPinned, RefreshCw, Search } from "lucide-react";
 import { fetchDeadlines, fetchInstances, fetchStats } from "./api";
 import type { ConferenceInstance, DeadlineEvent, Stats, TabKey } from "./types";
@@ -25,6 +25,14 @@ const categoryColors: Record<string, string> = {
 };
 
 const fallbackCategoryColor = "#475569";
+
+const countryLayerStyle: L.PathOptions = {
+  color: "#9ca8b8",
+  fillColor: "#eef2f6",
+  fillOpacity: 1,
+  opacity: 1,
+  weight: 0.8
+};
 
 function formatDate(value: string | null): string {
   return value ?? "TBD";
@@ -304,15 +312,40 @@ function ConferenceList({ items, emptyLabel }: { items: ConferenceInstance[]; em
 }
 
 function MapPanel({ items }: { items: ConferenceInstance[] }) {
+  const [worldCountriesData, setWorldCountriesData] = useState<GeoJSON.GeoJsonObject | null>(null);
   const center: L.LatLngExpression = [20, 0];
+
+  useEffect(() => {
+    fetch(`${import.meta.env.BASE_URL}natural-earth/ne_110m_admin_0_countries.json`)
+      .then((response) => {
+        if (!response.ok) throw new Error(`Natural Earth map load failed: ${response.status}`);
+        return response.json();
+      })
+      .then((data: unknown) => setWorldCountriesData(data as GeoJSON.GeoJsonObject))
+      .catch(() => setWorldCountriesData(null));
+  }, []);
 
   return (
     <div className="map-wrap">
-      <MapContainer center={center} zoom={2} minZoom={2} scrollWheelZoom className="map">
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-        />
+      <MapContainer
+        center={center}
+        zoom={2}
+        minZoom={2}
+        maxZoom={6}
+        scrollWheelZoom
+        className="map"
+        attributionControl={false}
+      >
+        {worldCountriesData && (
+          <GeoJSON
+            data={worldCountriesData}
+            style={countryLayerStyle}
+            onEachFeature={(feature, layer) => {
+              const name = typeof feature.properties?.name === "string" ? feature.properties.name : undefined;
+              if (name) layer.bindTooltip(name, { sticky: true, opacity: 0.92 });
+            }}
+          />
+        )}
         {items.map((item) => (
           <CircleMarker
             key={item.instance_id}
