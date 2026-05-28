@@ -187,7 +187,7 @@ def conflicts():
 
 
 @app.get("/api/deadlines")
-def deadlines(future_only: bool = True):
+def deadlines(future_only: bool = False):
     filters = ["1 = 1"]
     params: list[object] = []
     if future_only:
@@ -195,12 +195,16 @@ def deadlines(future_only: bool = True):
         params.append(date.today().isoformat())
     data = rows(
         f"""
-        SELECT d.*, i.year, c.abbreviation, c.full_name, c.primary_category, c.ranking_json
+        SELECT d.*, i.year, c.abbreviation, c.full_name, c.primary_category, c.ranking_json,
+               CASE
+                   WHEN d.deadline_date IS NOT NULL AND d.deadline_date < date('now') THEN 1
+                   ELSE 0
+               END AS is_past
         FROM deadline_events d
         JOIN instances i ON i.instance_id = d.instance_id
         JOIN conferences c ON c.conference_id = i.conference_id
         WHERE {' AND '.join(filters)}
-        ORDER BY d.deadline_date IS NULL, d.deadline_date, c.abbreviation
+        ORDER BY is_past, d.deadline_date IS NULL, d.deadline_date, c.abbreviation
         """,
         params,
     )

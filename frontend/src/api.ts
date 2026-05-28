@@ -19,7 +19,7 @@ export function fetchRecent(): Promise<ConferenceInstance[]> {
 }
 
 export function fetchDeadlines(): Promise<DeadlineEvent[]> {
-  return getJson<DeadlineEvent[]>("/api/deadlines?future_only=true");
+  return getJson<DeadlineEvent[]>("/api/deadlines?future_only=false");
 }
 
 export function fetchStats(): Promise<Stats> {

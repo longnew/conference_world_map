@@ -43,7 +43,7 @@ export type ConferenceInstance = {
   }>;
 };
 
-export type TabKey = "map" | "tracking" | "deadlines" | "recent" | "conflicts" | "archive";
+export type TabKey = "map" | "deadlines";
 
 export type DeadlineEvent = {
   deadline_id: string;
@@ -59,6 +59,7 @@ export type DeadlineEvent = {
   abbreviation: string;
   full_name: string;
   primary_category: string;
+  is_past: number;
   ranking: {
     ccf?: string;
     kiise?: string;

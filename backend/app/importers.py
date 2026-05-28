@@ -222,6 +222,8 @@ def split_place(value: str | None) -> tuple[str | None, str | None, str | None]:
         return None, None, None
     city = parts[0]
     country = parts[-1] if len(parts) > 1 else None
+    if len(parts) == 2 and parts[1].strip().lower() in {"ca", "pa", "ga"}:
+        return city, parts[1].strip(), "United States"
     country = normalize_country(country)
     state = ", ".join(parts[1:-1]) if len(parts) > 2 else None
     return city, state, country
@@ -253,6 +255,7 @@ def build_records(
         c = ccf.get(cid, {})
         abbreviation = c.get("abbreviation") or k.get("abbreviation") or cid.upper()
         full_name = c.get("full_name") or k.get("full_name") or abbreviation
+        primary_category = infer_category(full_name, c.get("sub"))
         ranking = {
             "ccf": c.get("ccf"),
             "kiise": k.get("kiise"),
@@ -270,9 +273,9 @@ def build_records(
                 "full_name": full_name,
                 "homepage_root": None,
                 "ranking": ranking,
-                "primary_category": c.get("primary_category") or infer_category(full_name),
+                "primary_category": primary_category,
                 "secondary_categories": [],
-                "purpose_summary": f"{full_name} tracks research topics in {c.get('primary_category') or infer_category(full_name)}.",
+                "purpose_summary": f"{full_name} tracks research topics in {primary_category}.",
                 "known_series_pattern": "annual",
                 "typical_months": [],
                 "tracking_priority": "high" if ranking.get("ccf") == "A" or ranking.get("kiise") == "최우수" else "medium",
@@ -402,7 +405,10 @@ def build_records(
     return conferences, instances
 
 
-def infer_category(full_name: str) -> str:
+def infer_category(full_name: str, sub: str | None = None) -> str:
+    if sub:
+        return SUB_TO_CATEGORY.get(sub, "Interdiscipline / Emerging")
+
     text = full_name.lower()
     if any(word in text for word in ["vision", "image", "multimedia"]):
         return "Computer Vision"
@@ -414,7 +420,7 @@ def infer_category(full_name: str) -> str:
         return "Database / Data Engineering"
     if any(word in text for word in ["architecture", "microarchitecture", "hardware"]):
         return "Computer Architecture"
-    return "AI / Machine Learning"
+    return SUB_TO_CATEGORY.get(sub, "AI / Machine Learning")
 
 
 def import_sources(

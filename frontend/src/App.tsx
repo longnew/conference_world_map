@@ -1,25 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import L from "leaflet";
-import { CircleMarker, MapContainer, Popup, TileLayer } from "react-leaflet";
+import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip } from "react-leaflet";
 import { CalendarDays, ChevronDown, ChevronRight, Database, Filter, Globe2, MapPinned, RefreshCw, Search } from "lucide-react";
-import { fetchDeadlines, fetchInstances, fetchRecent, fetchStats } from "./api";
+import { fetchDeadlines, fetchInstances, fetchStats } from "./api";
 import type { ConferenceInstance, DeadlineEvent, Stats, TabKey } from "./types";
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "map", label: "Map" },
-  { key: "tracking", label: "Tracking" },
-  { key: "deadlines", label: "Deadlines" },
-  { key: "recent", label: "Recently Updated" },
-  { key: "conflicts", label: "Conflicts" },
-  { key: "archive", label: "Archive" }
+  { key: "deadlines", label: "Deadlines" }
 ];
 
 const categoryColors: Record<string, string> = {
   "AI / Machine Learning": "#2563eb",
-  "Computer Vision": "#16a34a",
+  "Algorithms / Theory": "#d97706",
   "Computer Architecture": "#dc2626",
-  "Database / Data Engineering": "#9333ea"
+  "Computer Vision": "#16a34a",
+  "Database / Data Engineering": "#7c3aed",
+  "HCI / Visualization": "#0891b2",
+  "Interdiscipline / Emerging": "#65a30d",
+  "Networking": "#ea580c",
+  "Security / Privacy": "#db2777",
+  "Software Engineering": "#059669"
 };
+
+const fallbackCategoryColor = "#475569";
 
 function formatDate(value: string | null): string {
   return value ?? "TBD";
@@ -30,14 +35,13 @@ function hasCoordinates(item: ConferenceInstance): boolean {
 }
 
 function isTracking(item: ConferenceInstance): boolean {
-  return !item.venue_name || !hasCoordinates(item);
+  return !hasCoordinates(item);
 }
 
 function formatPlace(item: ConferenceInstance): string {
-  if (item.venue_name) return item.venue_name;
   if (item.city && item.country_ko) return `${item.city}, ${item.country_ko}`;
   if (item.city && item.country) return `${item.city}, ${item.country}`;
-  return "Venue TBD";
+  return "Location TBD";
 }
 
 function toggleValue(values: string[], value: string): string[] {
@@ -49,9 +53,28 @@ function deadlineSortValue(item: DeadlineEvent): number {
   return new Date(item.deadline_date).getTime();
 }
 
+function compareDeadlineTimeline(a: DeadlineEvent, b: DeadlineEvent): number {
+  if (a.is_past !== b.is_past) return a.is_past - b.is_past;
+  if (!a.is_past) return deadlineSortValue(a) - deadlineSortValue(b);
+  return deadlineSortValue(b) - deadlineSortValue(a);
+}
+
+function getCategoryColor(name: string): string {
+  return categoryColors[name] ?? fallbackCategoryColor;
+}
+
+function categoryButtonStyle(name: string, selected: boolean): CSSProperties {
+  const color = getCategoryColor(name);
+  return {
+    "--category-color": color,
+    borderColor: selected ? color : undefined,
+    backgroundColor: selected ? `${color}18` : undefined,
+    color: selected ? color : undefined
+  } as CSSProperties;
+}
+
 export function App() {
   const [instances, setInstances] = useState<ConferenceInstance[]>([]);
-  const [recent, setRecent] = useState<ConferenceInstance[]>([]);
   const [deadlines, setDeadlines] = useState<DeadlineEvent[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("map");
@@ -64,10 +87,9 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([fetchInstances(), fetchRecent(), fetchDeadlines(), fetchStats()])
-      .then(([allItems, recentItems, deadlineItems, statsData]) => {
+    Promise.all([fetchInstances(), fetchDeadlines(), fetchStats()])
+      .then(([allItems, deadlineItems, statsData]) => {
         setInstances(allItems);
-        setRecent(recentItems);
         setDeadlines(deadlineItems);
         setStats(statsData);
       })
@@ -96,7 +118,6 @@ export function App() {
     });
   }, [instances, query, selectedCategories, confidence, ccf, kiise]);
 
-  const visibleItems = activeTab === "recent" ? recent : filtered;
   const mapItems = filtered.filter(hasCoordinates);
   const trackingItems = filtered.filter(isTracking);
   const filteredDeadlineIds = new Set(filtered.map((item) => item.instance_id));
@@ -109,15 +130,28 @@ export function App() {
           <div className="brand-mark"><Globe2 size={20} /></div>
           <div>
             <h1>AI/CS Conference Tracker</h1>
-            <p>Ranking-based venue and deadline tracking</p>
+            <p>Ranking-based location and deadline tracking</p>
           </div>
         </header>
 
         <section className="toolbar">
-          <label className="search">
-            <Search size={16} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conference" />
-          </label>
+          <div className="search-row">
+            <label className="search">
+              <Search size={16} />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conference" />
+            </label>
+            <button
+              type="button"
+              className="filter-reset"
+              onClick={() => setSelectedCategories([])}
+              disabled={selectedCategories.length === 0}
+              aria-label="Reset category filters"
+              title="Reset category filters"
+            >
+              <RefreshCw size={14} />
+              Reset
+            </button>
+          </div>
           <div className="category-filter" aria-label="Category filters">
             <button
               type="button"
@@ -130,10 +164,11 @@ export function App() {
               <button
                 key={name}
                 type="button"
-                className={selectedCategories.includes(name) ? "active" : ""}
+                className={`category-option ${selectedCategories.includes(name) ? "active" : ""}`}
+                style={categoryButtonStyle(name, selectedCategories.includes(name))}
                 onClick={() => setSelectedCategories((current) => toggleValue(current, name))}
               >
-                <span style={{ backgroundColor: categoryColors[name] ?? "#0f766e" }} />
+                <span />
                 {name}
               </button>
             ))}
@@ -181,10 +216,8 @@ export function App() {
         {!loading && !error && (
           <ConferenceList
             items={
-              activeTab === "tracking" ? trackingItems :
               activeTab === "deadlines" ? [] :
-              activeTab === "map" ? mapItems :
-              visibleItems
+              mapItems
             }
             emptyLabel={activeTab === "map" ? "No geocoded conferences yet." : "No matching conferences."}
           />
@@ -193,30 +226,51 @@ export function App() {
 
       <section className="workspace">
         <div className="statusbar">
-          <Metric icon={<Database size={18} />} label="Conferences" value={stats?.conferences ?? 0} />
-          <Metric icon={<Database size={18} />} label="Future instances" value={stats?.future_instances ?? instances.length} />
-          <Metric icon={<MapPinned size={18} />} label="Map-ready" value={mapItems.length} />
-          <Metric icon={<RefreshCw size={18} />} label="Tracking" value={trackingItems.length} />
-          <Metric icon={<CalendarDays size={18} />} label="Deadlines" value={deadlineItems.length} />
+          <Metric
+            icon={<Database size={18} />}
+            label="Conferences"
+            value={stats?.conferences ?? 0}
+            description="Active conference master records from CCF A/B and KIISE ranked sources."
+          />
+          <Metric
+            icon={<Database size={18} />}
+            label="Future instances"
+            value={stats?.future_instances ?? instances.length}
+            description="Upcoming or TBD yearly conference instances currently loaded in the app."
+          />
+          <Metric
+            icon={<MapPinned size={18} />}
+            label="Map-ready"
+            value={mapItems.length}
+            description="Filtered future instances with latitude and longitude, so they can be drawn on the map."
+          />
+          <Metric
+            icon={<RefreshCw size={18} />}
+            label="Unmapped"
+            value={trackingItems.length}
+            description="Filtered future instances without latitude or longitude, so they cannot be drawn on the map yet."
+          />
+          <Metric
+            icon={<CalendarDays size={18} />}
+            label="Deadlines"
+            value={deadlineItems.length}
+            description="Deadline events matching the current filters, including past events shown dimmed."
+          />
         </div>
 
         {activeTab === "map" ? (
           <MapPanel items={mapItems} />
         ) : (
-          activeTab === "deadlines" ? (
-            <DeadlinePanel items={deadlineItems} />
-          ) : (
-            <DetailPanel tab={activeTab} items={activeTab === "tracking" ? trackingItems : visibleItems} />
-          )
+          <DeadlinePanel items={deadlineItems} />
         )}
       </section>
     </main>
   );
 }
 
-function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+function Metric({ icon, label, value, description }: { icon: React.ReactNode; label: string; value: number; description: string }) {
   return (
-    <div className="metric">
+    <div className="metric" title={description} data-tooltip={description} aria-label={`${label}: ${description}`}>
       {icon}
       <span>{label}</span>
       <strong>{value}</strong>
@@ -265,16 +319,19 @@ function MapPanel({ items }: { items: ConferenceInstance[] }) {
             center={[item.latitude!, item.longitude!]}
             radius={10}
             pathOptions={{
-              color: categoryColors[item.primary_category] ?? "#0f766e",
-              fillColor: categoryColors[item.primary_category] ?? "#0f766e",
+              color: getCategoryColor(item.primary_category),
+              fillColor: getCategoryColor(item.primary_category),
               fillOpacity: item.confidence === "low" ? 0.45 : 0.75,
-              weight: item.coordinate_precision === "venue_exact" ? 3 : 2
+              weight: item.coordinate_precision !== "city" ? 3 : 2
             }}
           >
+            <Tooltip direction="top" offset={[0, -10]} opacity={0.94}>
+              {item.city ? `${item.city}, ${item.country ?? item.country_ko ?? "Unknown"}` : item.country ?? item.country_ko ?? "Unknown"}
+            </Tooltip>
             <Popup>
               <strong>{item.abbreviation} {item.year}</strong>
               <br />
-              {item.venue_name ?? item.city}
+              {formatPlace(item)}
               <br />
               {item.confidence} confidence
             </Popup>
@@ -283,24 +340,14 @@ function MapPanel({ items }: { items: ConferenceInstance[] }) {
       </MapContainer>
       {!items.length && (
         <div className="map-empty">
-          Seed data is loaded, but no venue coordinates are confirmed yet.
+          Seed data is loaded, but no coordinates are available yet.
         </div>
       )}
     </div>
   );
 }
 
-function DetailPanel({ tab, items }: { tab: TabKey; items: ConferenceInstance[] }) {
-  return (
-    <div className="detail-panel">
-      <h2>{tabs.find((item) => item.key === tab)?.label}</h2>
-      <ConferenceList items={items} emptyLabel="No items in this view." />
-    </div>
-  );
-}
-
 function DeadlinePanel({ items }: { items: DeadlineEvent[] }) {
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const groups = useMemo(() => {
@@ -310,19 +357,21 @@ function DeadlinePanel({ items }: { items: DeadlineEvent[] }) {
     }
     return Array.from(byInstance.entries())
       .map(([instanceId, groupItems]) => {
-        const sortedItems = [...groupItems].sort((a, b) => deadlineSortValue(a) - deadlineSortValue(b));
+        const sortedItems = [...groupItems].sort(compareDeadlineTimeline);
         return {
           instanceId,
           items: sortedItems,
           first: sortedItems[0],
           hasSameDate: new Set(sortedItems.map((item) => item.deadline_date ?? "TBD")).size === 1,
+          isPast: sortedItems.every((item) => item.is_past === 1),
         };
       })
       .sort((a, b) => {
-        const delta = deadlineSortValue(a.first) - deadlineSortValue(b.first);
-        return sortDirection === "asc" ? delta : -delta;
+        const delta = compareDeadlineTimeline(a.first, b.first);
+        if (delta !== 0) return delta;
+        return `${a.first.abbreviation} ${a.first.year}`.localeCompare(`${b.first.abbreviation} ${b.first.year}`);
       });
-  }, [items, sortDirection]);
+  }, [items]);
 
   const toggleExpanded = (instanceId: string) => {
     setExpanded((current) => {
@@ -340,16 +389,14 @@ function DeadlinePanel({ items }: { items: DeadlineEvent[] }) {
           <h2>Deadlines</h2>
           <p>Confidence: high = official source verified, medium = tracker source such as ccfddl, low = placeholder or unverified.</p>
         </div>
-        <button className="sort-button" type="button" onClick={() => setSortDirection((value) => value === "asc" ? "desc" : "asc")}>
-          Date {sortDirection === "asc" ? "oldest first" : "newest first"}
-        </button>
+        <span className="sort-status">Upcoming first</span>
       </div>
       {!items.length ? (
-        <div className="notice">No upcoming deadline rounds match the filters.</div>
+        <div className="notice">No deadline rounds match the filters.</div>
       ) : (
         <div className="deadline-table">
           {groups.map((group) => (
-            <article key={group.instanceId} className="deadline-group">
+            <article key={group.instanceId} className={`deadline-group ${group.isPast ? "past" : ""}`}>
               <button className="deadline-summary" type="button" onClick={() => toggleExpanded(group.instanceId)}>
                 {expanded.has(group.instanceId) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                 <div>
@@ -366,7 +413,7 @@ function DeadlinePanel({ items }: { items: DeadlineEvent[] }) {
               {expanded.has(group.instanceId) && (
                 <div className="deadline-rounds">
                   {group.items.map((item) => (
-                    <div key={item.deadline_id} className="deadline-row">
+                    <div key={item.deadline_id} className={`deadline-row ${item.is_past === 1 ? "past" : ""}`}>
                       <span>{item.deadline_type}</span>
                       <span>{item.deadline_time_raw ?? "TBD"}</span>
                       <span>{item.timezone ?? "-"}</span>

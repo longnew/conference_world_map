@@ -3,6 +3,7 @@ from __future__ import annotations
 COUNTRY_ALIASES = {
     "australia": "Australia",
     "austria": "Austria",
+    "be": "Belgium",
     "brazil": "Brazil",
     "ca": "Canada",
     "canada": "Canada",
@@ -46,6 +47,9 @@ COUNTRY_ALIASES = {
 }
 
 STATE_TO_COUNTRY = {
+    "ca": "United States",
+    "pa": "United States",
+    "ga": "United States",
     "california": "United States",
     "colorado": "United States",
     "florida": "United States",
@@ -65,43 +69,46 @@ STATE_TO_COUNTRY = {
 }
 
 COUNTRY_KO = {
-    "Australia": "호주",
-    "Austria": "오스트리아",
-    "Brazil": "브라질",
-    "Canada": "캐나다",
-    "China": "중국",
-    "Cyprus": "키프로스",
-    "Czechia": "체코",
-    "Denmark": "덴마크",
-    "Finland": "핀란드",
-    "France": "프랑스",
-    "Germany": "독일",
-    "Greece": "그리스",
-    "Hungary": "헝가리",
-    "India": "인도",
-    "Ireland": "아일랜드",
-    "Italy": "이탈리아",
-    "Japan": "일본",
-    "South Korea": "대한민국",
-    "Morocco": "모로코",
-    "Netherlands": "네덜란드",
-    "Portugal": "포르투갈",
-    "Singapore": "싱가포르",
-    "Spain": "스페인",
-    "Sweden": "스웨덴",
-    "Switzerland": "스위스",
-    "Thailand": "태국",
-    "United Arab Emirates": "아랍에미리트",
-    "United Kingdom": "영국",
-    "United States": "미국",
+    "Australia": "\ud638\uc8fc",
+    "Austria": "\uc624\uc2a4\ud2b8\ub9ac\uc544",
+    "Belgium": "\ubca8\uae30\uc5d0",
+    "Brazil": "\ube0c\ub77c\uc9c8",
+    "Canada": "\uce90\ub098\ub2e4",
+    "China": "\uc911\uad6d",
+    "Cyprus": "\ud0a4\ud504\ub85c\uc2a4",
+    "Czechia": "\uccb4\ucf54",
+    "Denmark": "\ub374\ub9c8\ud06c",
+    "Finland": "\ud540\ub780\ub4dc",
+    "France": "\ud504\ub791\uc2a4",
+    "Germany": "\ub3c5\uc77c",
+    "Greece": "\uadf8\ub9ac\uc2a4",
+    "Hungary": "\ud5dd\uac00\ub9ac",
+    "India": "\uc778\ub3c4",
+    "Ireland": "\uc544\uc77c\ub79c\ub4dc",
+    "Italy": "\uc774\ud0c8\ub9ac\uc544",
+    "Japan": "\uc77c\ubcf8",
+    "South Korea": "\ub300\ud55c\ubbfc\uad6d",
+    "Morocco": "\ubaa8\ub85c\ucf54",
+    "Netherlands": "\ub124\ub35c\ub780\ub4dc",
+    "Portugal": "\ud3ec\ub974\ud22c\uac08",
+    "Singapore": "\uc2f1\uac00\ud3ec\ub974",
+    "Spain": "\uc2a4\ud398\uc778",
+    "Sweden": "\uc2a4\uc6e8\ub374",
+    "Switzerland": "\uc2a4\uc704\uc2a4",
+    "Thailand": "\ud0dc\uad6d",
+    "United Arab Emirates": "\uc544\ub78d\uc5d0\ubbf8\ub9ac\ud2b8",
+    "United Kingdom": "\uc601\uad6d",
+    "United States": "\ubbf8\uad6d",
 }
 
 
-def normalize_country(value: str | None) -> str | None:
+def normalize_country(value: str | None, *, prefer_state: bool = False) -> str | None:
     if not value:
         return None
     cleaned = value.strip()
     lowered = cleaned.lower().strip(".")
+    if prefer_state and lowered in STATE_TO_COUNTRY:
+        return STATE_TO_COUNTRY[lowered]
     if lowered in COUNTRY_ALIASES:
         return COUNTRY_ALIASES[lowered]
     if lowered in STATE_TO_COUNTRY:
